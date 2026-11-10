@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hesap Makinesi</title>
+<style>
+:root {
+  --bg: #e9edf2;
+  --body: #f7f9fb;
+  --screen: #1f2933;
+  --screen-text: #f4f7fa;
+  --screen-dim: #8a98a8;
+  --key: #ffffff;
+  --key-text: #1f2933;
+  --key-edge: #d3dae2;
+  --op: #dfe7ef;
+  --accent: #1b6ef3;
+  --accent-text: #ffffff;
+  --clear: #e4572e;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12161b;
+    --body: #1b2129;
+    --screen: #0d1014;
+    --screen-text: #f4f7fa;
+    --screen-dim: #7d8a99;
+    --key: #28313b;
+    --key-text: #eef2f6;
+    --key-edge: #0f1317;
+    --op: #34404c;
+    --accent: #4b8bff;
+    --accent-text: #0b1320;
+    --clear: #ff7a52;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12161b; --body: #1b2129; --screen: #0d1014; --screen-text: #f4f7fa;
+  --screen-dim: #7d8a99; --key: #28313b; --key-text: #eef2f6; --key-edge: #0f1317;
+  --op: #34404c; --accent: #4b8bff; --accent-text: #0b1320; --clear: #ff7a52;
+}
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  padding: 16px;
+}
+.calc {
+  width: 100%;
+  max-width: 340px;
+  background: var(--body);
+  border-radius: 22px;
+  padding: 18px;
+  box-shadow: 0 18px 40px rgba(20, 30, 45, .18);
+}
+.screen {
+  background: var(--screen);
+  color: var(--screen-text);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  text-align: right;
+  min-height: 96px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+}
+.prev { color: var(--screen-dim); font-size: 15px; min-height: 20px; word-break: break-all; }
+.cur { font-size: 38px; font-weight: 600; line-height: 1.2; word-break: break-all; }
+.keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+button {
+  font: inherit;
+  font-size: 20px;
+  font-weight: 500;
+  height: 58px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--key);
+  color: var(--key-text);
+  box-shadow: 0 2px 0 var(--key-edge);
+  cursor: pointer;
+  transition: transform .06s, box-shadow .06s;
+}
+button:active { transform: translateY(2px); box-shadow: 0 0 0 var(--key-edge); }
+button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+button.op { background: var(--op); }
+button.clear { color: var(--clear); }
+button.eq { background: var(--accent); color: var(--accent-text); grid-row: span 2; height: auto; }
+button.zero { grid-column: span 2; }
+</style>
+</head>
+<body>
+<main class="calc" aria-label="Hesap makinesi">
+  <div class="screen" aria-live="polite">
+    <div class="prev" id="prev"></div>
+    <div class="cur" id="cur">0</div>
+  </div>
+  <div class="keys">
+    <button class="clear" data-a="clear">C</button>
+    <button class="op" data-a="back" aria-label="Sil">⌫</button>
+    <button class="op" data-a="percent">%</button>
+    <button class="op" data-a="op" data-v="÷">÷</button>
+
+    <button data-a="num" data-v="7">7</button>
+    <button data-a="num" data-v="8">8</button>
+    <button data-a="num" data-v="9">9</button>
+    <button class="op" data-a="op" data-v="×">×</button>
+
+    <button data-a="num" data-v="4">4</button>
+    <button data-a="num" data-v="5">5</button>
+    <button data-a="num" data-v="6">6</button>
+    <button class="op" data-a="op" data-v="−">−</button>
+
+    <button data-a="num" data-v="1">1</button>
+    <button data-a="num" data-v="2">2</button>
+    <button data-a="num" data-v="3">3</button>
+    <button class="op" data-a="op" data-v="+">+</button>
+
+    <button class="zero" data-a="num" data-v="0">0</button>
+    <button data-a="dot">,</button>
+    <button class="eq" data-a="eq">=</button>
+  </div>
+</main>
+<script>
+let cur = "0", prev = null, op = null, fresh = false;
+const curEl = document.getElementById("cur"), prevEl = document.getElementById("prev");
+
+const fmt = s => {
+  if (s === "Hata") return s;
+  let [i, d] = s.split(".");
+  const neg = i.startsWith("-");
+  if (neg) i = i.slice(1);
+  i = i.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return (neg ? "-" : "") + i + (d !== undefined ? "," + d : "");
+};
+const render = () => {
+  curEl.textContent = fmt(cur);
+  prevEl.textContent = prev !== null && op ? fmt(prev) + " " + op : "";
+};
+const calc = (a, b, o) => {
+  a = parseFloat(a); b = parseFloat(b);
+  let r = o === "+" ? a + b : o === "−" ? a - b : o === "×" ? a * b : b === 0 ? NaN : a / b;
+  return isFinite(r) ? String(parseFloat(r.toPrecision(12))) : "Hata";
+};
+function act(a, v) {
+  if (cur === "Hata" && a !== "clear") { cur = "0"; prev = null; op = null; }
+  if (a === "num") {
+    cur = (cur === "0" || fresh) ? v : (cur.replace(/[-.]/g, "").length < 12 ? cur + v : cur);
+    fresh = false;
+  } else if (a === "dot") {
+    if (fresh) { cur = "0"; fresh = false; }
+    if (!cur.includes(".")) cur += ".";
+  } else if (a === "clear") {
+    cur = "0"; prev = null; op = null; fresh = false;
+  } else if (a === "back") {
+    if (fresh) return;
+    cur = cur.length > 1 && !(cur.length === 2 && cur[0] === "-") ? cur.slice(0, -1) : "0";
+  } else if (a === "percent") {
+    cur = String(parseFloat((parseFloat(cur) / 100).toPrecision(12)));
+  } else if (a === "op") {
+    if (op && prev !== null && !fresh) { cur = calc(prev, cur, op); }
+    prev = cur; op = v; fresh = true;
+  } else if (a === "eq") {
+    if (op && prev !== null) { cur = calc(prev, cur, op); prev = null; op = null; fresh = true; }
+  }
+  render();
+}
+document.querySelector(".keys").addEventListener("click", e => {
+  const b = e.target.closest("button");
+  if (b) act(b.dataset.a, b.dataset.v);
+});
+document.addEventListener("keydown", e => {
+  const k = e.key;
+  if (/^\d$/.test(k)) act("num", k);
+  else if (k === "," || k === ".") act("dot");
+  else if (k === "+") act("op", "+");
+  else if (k === "-") act("op", "−");
+  else if (k === "*") act("op", "×");
+  else if (k === "/") { e.preventDefault(); act("op", "÷"); }
+  else if (k === "Enter" || k === "=") { e.preventDefault(); act("eq"); }
+  else if (k === "Backspace") act("back");
+  else if (k === "Escape") act("clear");
+  else if (k === "%") act("percent");
+});
+render();
+</script>
+</body>
+</html>
